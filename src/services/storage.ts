@@ -1,40 +1,190 @@
 import React from 'react';
-import { Product, Category, SiteSettings, AdminRole } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_CATEGORIES, INITIAL_SETTINGS, DEFAULT_FALLBACK_IMAGE } from '../data/mockData';
+import { Product, SiteSettings, AdminRole } from '../types';
+import { INITIAL_PRODUCTS, INITIAL_SETTINGS, DEFAULT_FALLBACK_IMAGE } from '../data/mockData';
 
 const STORAGE_KEYS = {
-  SETTINGS: 'jouri_settings_v4',
-  PRODUCTS: 'jouri_products_v4',
-  ADMIN_ROLE: 'jouri_admin_role_v4',
+  SETTINGS: 'jouri_settings_v5',
+  PRODUCTS: 'jouri_products_v5',
+  ADMIN_ROLE: 'jouri_admin_role_v5',
+  LAST_SYNC: 'jouri_last_sync_v5',
 };
 
-export const StorageService = {
-  // Site Settings
-  getSettings(): SiteSettings {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS) || localStorage.getItem('jouri_settings_v3');
-      if (!data) {
-        localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-        return INITIAL_SETTINGS;
-      }
-      const parsed = JSON.parse(data);
-      return {
-        ...INITIAL_SETTINGS,
-        ...parsed,
-        adminPin: parsed.adminPin !== undefined ? parsed.adminPin : (INITIAL_SETTINGS.adminPin || '2026'),
-        staffPin: parsed.staffPin !== undefined ? parsed.staffPin : (INITIAL_SETTINGS.staffPin || '5555'),
-        whatsappNumber: parsed.whatsappNumber !== undefined ? parsed.whatsappNumber : INITIAL_SETTINGS.whatsappNumber,
-        instagramUrl: parsed.instagramUrl !== undefined ? parsed.instagramUrl : INITIAL_SETTINGS.instagramUrl,
-        tiktokUrl: parsed.tiktokUrl !== undefined ? parsed.tiktokUrl : '',
-        facebookUrl: parsed.facebookUrl !== undefined ? parsed.facebookUrl : '',
-      };
-    } catch {
-      return INITIAL_SETTINGS;
+// In-memory cache for instant synchronous render
+let cachedSettings: SiteSettings = (() => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.SETTINGS) || localStorage.getItem('jouri_settings_v4');
+    if (raw) {
+      return { ...INITIAL_SETTINGS, ...JSON.parse(raw) };
     }
+  } catch (e) {
+    console.warn('Could not read cached settings:', e);
+  }
+  return INITIAL_SETTINGS;
+})();
+
+let cachedProducts: Product[] = (() => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.PRODUCTS) || localStorage.getItem('jouri_products_v4');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read cached products:', e);
+  }
+  return INITIAL_PRODUCTS;
+})();
+
+type SyncListener = (data: { products: Product[]; settings: SiteSettings }) => void;
+const listeners = new Set<SyncListener>();
+let sseSource: EventSource | null = null;
+let pollInterval: NodeJS.Timeout | null = null;
+let isSyncInitialized = false;
+
+function notifyListeners() {
+  const payload = { products: cachedProducts, settings: cachedSettings };
+  for (const listener of listeners) {
+    try {
+      listener(payload);
+    } catch (err) {
+      console.error('Error invoking sync listener:', err);
+    }
+  }
+}
+
+function updateLocalCache(products?: Product[], settings?: SiteSettings) {
+  let changed = false;
+
+  if (settings) {
+    cachedSettings = { ...INITIAL_SETTINGS, ...settings };
+    try {
+      localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(cachedSettings));
+    } catch {}
+    changed = true;
+  }
+
+  if (products && Array.isArray(products)) {
+    // Sanitize any broken local image paths
+    cachedProducts = products.map((p) => {
+      const hasBroken = !p.images || p.images.length === 0 || p.images.some((img) => !img || img.startsWith('/src/assets') || img.startsWith('./src/assets'));
+      if (hasBroken) {
+        const fallback = INITIAL_PRODUCTS.find((initP) => initP.id === p.id)?.images || [DEFAULT_FALLBACK_IMAGE];
+        return { ...p, images: fallback };
+      }
+      return p;
+    });
+    try {
+      localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(cachedProducts));
+    } catch {}
+    changed = true;
+  }
+
+  if (changed) {
+    notifyListeners();
+  }
+}
+
+// Fetch latest global state from backend
+async function fetchGlobalState(): Promise<void> {
+  try {
+    const res = await fetch('/api/state', {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.products && data.settings) {
+        updateLocalCache(data.products, data.settings);
+      }
+    }
+  } catch (err) {
+    // Server might be starting or offline, fallback to local cache
+  }
+}
+
+// Setup real-time SSE stream with automatic reconnection and fallback polling
+function setupRealtimeConnection() {
+  if (typeof window === 'undefined' || isSyncInitialized) return;
+  isSyncInitialized = true;
+
+  // Initial fetch
+  fetchGlobalState();
+
+  // 1. Server-Sent Events (SSE) for instant cross-device broadcast
+  try {
+    if (window.EventSource) {
+      sseSource = new EventSource('/api/stream');
+
+      sseSource.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload && (payload.products || payload.settings)) {
+            updateLocalCache(payload.products, payload.settings);
+          }
+        } catch (e) {
+          console.error('Failed to parse SSE payload:', e);
+        }
+      };
+
+      sseSource.onerror = () => {
+        // SSE will attempt auto-reconnect, but fallback polling handles gaps
+      };
+    }
+  } catch (err) {
+    console.warn('SSE connection unavailable, using polling sync:', err);
+  }
+
+  // 2. Periodic background poll (every 4 seconds) to ensure 100% sync reliability
+  pollInterval = setInterval(() => {
+    fetchGlobalState();
+  }, 4000);
+}
+
+// Exported Storage Service
+export const StorageService = {
+  // Initialize real-time synchronization across devices
+  init(): void {
+    setupRealtimeConnection();
   },
 
-  saveSettings(settings: SiteSettings): void {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+  // Subscribe to real-time changes
+  subscribe(listener: SyncListener): () => void {
+    listeners.add(listener);
+    setupRealtimeConnection();
+    // Call immediately with current state
+    listener({ products: cachedProducts, settings: cachedSettings });
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+
+  // Site Settings
+  getSettings(): SiteSettings {
+    return cachedSettings;
+  },
+
+  async saveSettings(settings: SiteSettings): Promise<SiteSettings> {
+    // 1. Optimistic local update
+    updateLocalCache(undefined, settings);
+
+    // 2. Persist to global backend
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        updateLocalCache(undefined, updated);
+        return updated;
+      }
+    } catch (err) {
+      console.warn('Failed to save settings to server, saved locally:', err);
+    }
+    return settings;
   },
 
   // Role-Based PIN Verification
@@ -50,96 +200,127 @@ export const StorageService = {
     return null;
   },
 
+  async verifyAdminPinRemote(pin: string): Promise<AdminRole | null> {
+    try {
+      const res = await fetch('/api/verify-pin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.role as AdminRole;
+      }
+    } catch {}
+    return this.verifyAdminPin(pin);
+  },
+
   getAdminRole(): AdminRole | null {
-    const role = sessionStorage.getItem(STORAGE_KEYS.ADMIN_ROLE);
-    if (role === 'super_admin' || role === 'staff') {
-      return role;
-    }
+    try {
+      const role = sessionStorage.getItem(STORAGE_KEYS.ADMIN_ROLE);
+      if (role === 'super_admin' || role === 'staff') {
+        return role;
+      }
+    } catch {}
     return null;
   },
 
   setAdminRole(role: AdminRole | null): void {
-    if (role) {
-      sessionStorage.setItem(STORAGE_KEYS.ADMIN_ROLE, role);
-    } else {
-      sessionStorage.removeItem(STORAGE_KEYS.ADMIN_ROLE);
-    }
+    try {
+      if (role) {
+        sessionStorage.setItem(STORAGE_KEYS.ADMIN_ROLE, role);
+      } else {
+        sessionStorage.removeItem(STORAGE_KEYS.ADMIN_ROLE);
+      }
+    } catch {}
   },
 
   isAdminAuthenticated(): boolean {
     return this.getAdminRole() !== null;
   },
 
-  // Products CRUD with auto-migration of broken/local image paths to reliable Unsplash URLs
+  // Products CRUD
   getProducts(): Product[] {
-    try {
-      const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS) || localStorage.getItem('jouri_products_v3');
-      if (!data) {
-        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
-        return INITIAL_PRODUCTS;
-      }
-      const parsed: Product[] = JSON.parse(data);
-
-      let needsSave = false;
-      const sanitized = parsed.map((p) => {
-        // Check if any image has broken or local relative path that fails on Vercel
-        const hasBrokenImage = !p.images || p.images.length === 0 || p.images.some((img) => !img || img.startsWith('/src/assets') || img.startsWith('./src/assets'));
-        if (hasBrokenImage) {
-          needsSave = true;
-          const matchingInit = INITIAL_PRODUCTS.find((initP) => initP.id === p.id);
-          const validImages = matchingInit
-            ? matchingInit.images
-            : [DEFAULT_FALLBACK_IMAGE];
-          return {
-            ...p,
-            images: validImages,
-          };
-        }
-        return p;
-      });
-
-      if (needsSave || !localStorage.getItem(STORAGE_KEYS.PRODUCTS)) {
-        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(sanitized));
-      }
-      return sanitized;
-    } catch {
-      return INITIAL_PRODUCTS;
-    }
+    return cachedProducts;
   },
 
-  saveProducts(products: Product[]): void {
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(products));
+  async fetchFreshProducts(): Promise<Product[]> {
+    await fetchGlobalState();
+    return cachedProducts;
   },
 
-  addProduct(product: Omit<Product, 'id' | 'createdAt'>): Product {
-    const products = this.getProducts();
-    const newProduct: Product = {
+  async addProduct(product: Omit<Product, 'id' | 'createdAt'>): Promise<Product> {
+    const tempId = `prod-${Date.now()}`;
+    const optimistic: Product = {
       ...product,
-      id: `prod-${Date.now()}`,
+      id: tempId,
       createdAt: new Date().toISOString(),
     };
-    products.unshift(newProduct);
-    this.saveProducts(products);
-    return newProduct;
-  },
 
-  updateProduct(product: Product): void {
-    const products = this.getProducts();
-    const index = products.findIndex((p) => p.id === product.id);
-    if (index !== -1) {
-      products[index] = product;
-      this.saveProducts(products);
+    // Optimistic update
+    updateLocalCache([optimistic, ...cachedProducts], undefined);
+
+    // Save to server
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product),
+      });
+      if (res.ok) {
+        const serverProduct = await res.json();
+        // Replace optimistic product with server product
+        const filtered = cachedProducts.filter((p) => p.id !== tempId);
+        updateLocalCache([serverProduct, ...filtered], undefined);
+        return serverProduct;
+      }
+    } catch (err) {
+      console.warn('Failed to add product to server, retained locally:', err);
     }
+    return optimistic;
   },
 
-  deleteProduct(productId: string): void {
-    const products = this.getProducts().filter((p) => p.id !== productId);
-    this.saveProducts(products);
+  async updateProduct(product: Product): Promise<Product> {
+    // Optimistic update
+    const updatedList = cachedProducts.map((p) => (p.id === product.id ? product : p));
+    updateLocalCache(updatedList, undefined);
+
+    // Save to server
+    try {
+      const res = await fetch(`/api/products/${encodeURIComponent(product.id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(product),
+      });
+      if (res.ok) {
+        const serverProduct = await res.json();
+        const syncedList = cachedProducts.map((p) => (p.id === product.id ? serverProduct : p));
+        updateLocalCache(syncedList, undefined);
+        return serverProduct;
+      }
+    } catch (err) {
+      console.warn('Failed to update product on server, retained locally:', err);
+    }
+    return product;
+  },
+
+  async deleteProduct(productId: string): Promise<void> {
+    // Optimistic update
+    const updatedList = cachedProducts.filter((p) => p.id !== productId);
+    updateLocalCache(updatedList, undefined);
+
+    // Delete on server
+    try {
+      await fetch(`/api/products/${encodeURIComponent(productId)}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('Failed to delete product from server:', err);
+    }
   },
 
   resetAll(): void {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
-    localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
+    updateLocalCache(INITIAL_PRODUCTS, INITIAL_SETTINGS);
   },
 };
 

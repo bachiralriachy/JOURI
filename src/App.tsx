@@ -22,14 +22,20 @@ export default function App() {
   // Secret Admin Modal State
   const [isAdminOpen, setIsAdminOpen] = useState(false);
 
-  // Load persistent data
+  // Load persistent data & subscribe to real-time updates across all devices
   const refreshAllData = () => {
     setProducts(StorageService.getProducts());
     setSettings(StorageService.getSettings());
   };
 
   useEffect(() => {
-    refreshAllData();
+    const unsubscribe = StorageService.subscribe((data) => {
+      setProducts(data.products);
+      setSettings(data.settings);
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Navigation Handlers

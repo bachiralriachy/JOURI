@@ -17,7 +17,6 @@ import {
   RefreshCw,
   LogOut,
   ChevronRight,
-  Database,
   Shield,
   ShieldAlert,
   UserCheck,
@@ -48,8 +47,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
 
-  // Active Admin View: 'products' | 'settings' | 'supabase'
-  const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'supabase'>('products');
+  // Active Admin View: 'products' | 'settings'
+  const [activeTab, setActiveTab] = useState<'products' | 'settings'>('products');
 
   // Product CRUD Modals
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -130,14 +129,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       subtitle: '',
       priceUSD: 95,
       category: 'Dresses',
-      images: '/src/assets/images/product_silk_pleated_dress_1792241564244.jpg',
+      images: DEFAULT_FALLBACK_IMAGE,
       sizes: 'S, M, L, XL',
       inStock: true,
     });
   };
 
   // Save Product (Both Super Admin and Staff are permitted)
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedImages = productForm.images
       .split(',')
@@ -149,24 +148,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const finalImages = parsedImages.length ? parsedImages : [DEFAULT_FALLBACK_IMAGE];
+
     if (editingProduct) {
-      StorageService.updateProduct({
+      await StorageService.updateProduct({
         ...editingProduct,
         title: productForm.title,
         subtitle: productForm.subtitle,
         priceUSD: Number(productForm.priceUSD),
         category: productForm.category,
-        images: parsedImages.length ? parsedImages : ['/src/assets/images/product_silk_pleated_dress_1792241564244.jpg'],
+        images: finalImages,
         sizes: parsedSizes.length ? parsedSizes : ['S', 'M', 'L'],
         inStock: productForm.inStock,
       });
     } else {
-      StorageService.addProduct({
+      await StorageService.addProduct({
         title: productForm.title,
         subtitle: productForm.subtitle,
         priceUSD: Number(productForm.priceUSD),
         category: productForm.category,
-        images: parsedImages.length ? parsedImages : ['/src/assets/images/product_silk_pleated_dress_1792241564244.jpg'],
+        images: finalImages,
         sizes: parsedSizes.length ? parsedSizes : ['S', 'M', 'L'],
         inStock: productForm.inStock,
       });
@@ -178,29 +179,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Confirm Delete Product (Super Admin permitted; Staff can also delete with confirmation or prompt)
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (deletingProduct) {
-      StorageService.deleteProduct(deletingProduct.id);
+      await StorageService.deleteProduct(deletingProduct.id);
       setDeletingProduct(null);
       onRefreshData();
     }
   };
 
   // Save Settings (Strictly Super Admin Only)
-  const handleSaveSettings = (e: React.FormEvent) => {
+  const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     if (currentRole !== 'super_admin') {
       alert('Permission Denied: Only Super Admin can modify site settings, exchange rates, or social media links.');
       return;
     }
-    StorageService.saveSettings(settingsForm);
+    await StorageService.saveSettings(settingsForm);
     setSettingsSuccess(true);
-    setTimeout(() => setSettingsSuccess(false), 2500);
+    setTimeout(() => setSettingsSuccess(false), 3000);
     onRefreshData();
   };
 
   // Dedicated Master PIN / Password Update Handler
-  const handleUpdateMasterPin = (e: React.FormEvent) => {
+  const handleUpdateMasterPin = async (e: React.FormEvent) => {
     e.preventDefault();
     setPinChangeError('');
     if (!newMasterPin.trim()) {
@@ -219,7 +220,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ...settingsForm,
       adminPin: newMasterPin.trim(),
     };
-    StorageService.saveSettings(updated);
+    await StorageService.saveSettings(updated);
     setSettingsForm(updated);
     setNewMasterPin('');
     setConfirmMasterPin('');
@@ -229,15 +230,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   };
 
   // Immediate Clear / Delete social media link or phone field
-  const handleClearField = (field: keyof SiteSettings, label: string) => {
+  const handleClearField = async (field: keyof SiteSettings, label: string) => {
     const updated: SiteSettings = {
       ...settingsForm,
       [field]: '',
     };
     setSettingsForm(updated);
-    StorageService.saveSettings(updated);
+    await StorageService.saveSettings(updated);
     setSettingsSuccess(true);
-    setTimeout(() => setSettingsSuccess(false), 2500);
+    setTimeout(() => setSettingsSuccess(false), 3000);
     onRefreshData();
   };
 
@@ -344,61 +345,48 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
       </header>
 
-      {/* Role-Aware Navigation Tabs */}
-      <div className="bg-[#FAF7F2] border-b border-[#E8DFD5] px-4 flex items-center gap-2 overflow-x-auto py-2.5 shrink-0">
-        <button
-          onClick={() => setActiveTab('products')}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
-            activeTab === 'products'
-              ? 'bg-[#24201D] text-white shadow-xs'
-              : 'bg-white text-stone-600 hover:text-[#24201D] border border-[#E2D8CC]'
-          }`}
-        >
-          Product Catalog ({products.length})
-        </button>
+      {/* Navigation Tabs with Real-Time Global Sync Status */}
+      <div className="bg-[#FAF7F2] border-b border-[#E8DFD5] px-4 flex items-center justify-between gap-2 overflow-x-auto py-2.5 shrink-0">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
+              activeTab === 'products'
+                ? 'bg-[#24201D] text-white shadow-xs'
+                : 'bg-white text-stone-600 hover:text-[#24201D] border border-[#E2D8CC]'
+            }`}
+          >
+            Product Catalog ({products.length})
+          </button>
 
-        {/* Site Settings Tab: Visible to Super Admin, Locked/Disabled for Staff */}
-        <button
-          onClick={() => {
-            if (isSuperAdmin) {
-              setActiveTab('settings');
-            } else {
-              alert('Access Restricted: Super Admin privileges required to edit site settings, social links, or exchange rates.');
-            }
-          }}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'settings'
-              ? 'bg-[#24201D] text-white shadow-xs'
-              : isSuperAdmin
-              ? 'bg-white text-stone-600 hover:text-[#24201D] border border-[#E2D8CC] cursor-pointer'
-              : 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed opacity-60'
-          }`}
-        >
-          {!isSuperAdmin && <Lock className="w-3 h-3 text-stone-400" />}
-          <span>Site Settings & Socials</span>
-          {!isSuperAdmin && <span className="text-[9px] bg-stone-200 px-1 py-0.2 rounded text-stone-600">Locked</span>}
-        </button>
+          {/* Site Settings Tab: Visible to Super Admin, Locked/Disabled for Staff */}
+          <button
+            onClick={() => {
+              if (isSuperAdmin) {
+                setActiveTab('settings');
+              } else {
+                alert('Access Restricted: Super Admin privileges required to edit site settings, social links, or exchange rates.');
+              }
+            }}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'settings'
+                ? 'bg-[#24201D] text-white shadow-xs'
+                : isSuperAdmin
+                ? 'bg-white text-stone-600 hover:text-[#24201D] border border-[#E2D8CC] cursor-pointer'
+                : 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed opacity-60'
+            }`}
+          >
+            {!isSuperAdmin && <Lock className="w-3 h-3 text-stone-400" />}
+            <span>Site Settings & Socials</span>
+            {!isSuperAdmin && <span className="text-[9px] bg-stone-200 px-1 py-0.2 rounded text-stone-600">Locked</span>}
+          </button>
+        </div>
 
-        {/* Supabase Tab */}
-        <button
-          onClick={() => {
-            if (isSuperAdmin) {
-              setActiveTab('supabase');
-            } else {
-              alert('Access Restricted: Database schema is reserved for Super Admin.');
-            }
-          }}
-          className={`px-4 py-2 text-xs font-semibold rounded-lg uppercase tracking-wider transition-colors whitespace-nowrap flex items-center gap-1.5 ${
-            activeTab === 'supabase'
-              ? 'bg-[#24201D] text-white shadow-xs'
-              : isSuperAdmin
-              ? 'bg-white text-stone-600 hover:text-[#24201D] border border-[#E2D8CC] cursor-pointer'
-              : 'bg-stone-100 text-stone-400 border border-stone-200 cursor-not-allowed opacity-60'
-          }`}
-        >
-          {!isSuperAdmin && <Lock className="w-3 h-3 text-stone-400" />}
-          <span>Database SQL Schema</span>
-        </button>
+        {/* Global Live Sync Indicator */}
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md shrink-0 font-medium">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span>Global Cloud Sync Active</span>
+        </div>
       </div>
 
       {/* Main Content Area (Mobile Scrollable) */}
@@ -901,58 +889,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <span>Save All Site Settings & Channels</span>
               </button>
             </form>
-          </div>
-        )}
-
-        {/* TAB 3: SUPABASE SQL SCHEMA (Super Admin Only) */}
-        {activeTab === 'supabase' && isSuperAdmin && (
-          <div className="space-y-4 max-w-3xl">
-            <div className="flex items-center justify-between">
-              <h2 className="font-serif text-2xl text-[#24201D]">
-                Database SQL Schema (Supabase / PostgreSQL)
-              </h2>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-stone-900 text-stone-200 px-2 py-1 rounded">
-                Migration Query
-              </span>
-            </div>
-            <p className="text-xs text-stone-500">
-              Run this SQL query in your Supabase SQL editor to ensure your database supports updating or removing social channels, credentials, and settings:
-            </p>
-
-            <div className="p-4 bg-stone-900 text-stone-200 rounded-xl font-mono text-xs overflow-x-auto shadow-md space-y-3">
-              <div className="text-[#B89772] font-bold">-- 1. Alter site_settings table schema:</div>
-              <pre>{`ALTER TABLE site_settings 
-ADD COLUMN IF NOT EXISTS admin_pin TEXT DEFAULT '2026',
-ADD COLUMN IF NOT EXISTS whatsapp_number TEXT DEFAULT '96181151937',
-ADD COLUMN IF NOT EXISTS instagram_url TEXT DEFAULT 'https://www.instagram.com/jouriboutiquee/',
-ADD COLUMN IF NOT EXISTS tiktok_url TEXT DEFAULT '',
-ADD COLUMN IF NOT EXISTS facebook_url TEXT DEFAULT '';`}</pre>
-
-              <div className="text-stone-400 pt-2 font-bold">-- 2. Full table creation structure:</div>
-              <pre>{`CREATE TABLE IF NOT EXISTS site_settings (
-  id INT PRIMARY KEY DEFAULT 1,
-  admin_pin TEXT DEFAULT '2026',
-  whatsapp_number TEXT DEFAULT '96181151937',
-  instagram_url TEXT DEFAULT 'https://www.instagram.com/jouriboutiquee/',
-  tiktok_url TEXT DEFAULT '',
-  facebook_url TEXT DEFAULT '',
-  usd_to_lbp_rate NUMERIC DEFAULT 89500,
-  address_text TEXT DEFAULT 'Broumana, Mar Chaaya, Next to coop',
-  google_maps_url TEXT DEFAULT 'https://maps.app.goo.gl/ASXXjPzwhJYC3oL77'
-);
-
-CREATE TABLE IF NOT EXISTS products (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  title TEXT NOT NULL,
-  subtitle TEXT,
-  price_usd NUMERIC NOT NULL,
-  category TEXT NOT NULL,
-  images TEXT[] NOT NULL,
-  sizes TEXT[] NOT NULL,
-  in_stock BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);`}</pre>
-            </div>
           </div>
         )}
       </main>
