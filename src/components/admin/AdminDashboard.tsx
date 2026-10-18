@@ -78,24 +78,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [settingsForm, setSettingsForm] = useState<SiteSettings>(settings);
   const [settingsSuccess, setSettingsSuccess] = useState(false);
 
-  // Dedicated Master PIN / Password Change State
-  const [newMasterPin, setNewMasterPin] = useState('');
-  const [confirmMasterPin, setConfirmMasterPin] = useState('');
-  const [showNewPin, setShowNewPin] = useState(false);
-  const [pinChangeError, setPinChangeError] = useState('');
-  const [pinChangeSuccess, setPinChangeSuccess] = useState(false);
+  // Dedicated Master Password Management State (Synced Globally)
+  const [currentPasswordInput, setCurrentPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState('');
+  const [passwordChangeSuccess, setPasswordChangeSuccess] = useState('');
+  const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
 
-  // Handle PIN Submission with Dual Role Verification
-  const handlePinSubmit = (e: React.FormEvent) => {
+  // Login Verification State
+  const [isVerifyingPin, setIsVerifyingPin] = useState(false);
+  const [showLoginPin, setShowLoginPin] = useState(false);
+
+  // Handle Login Submission with Instant Cloud Remote Verification
+  const handlePinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const verifiedRole = StorageService.verifyAdminPin(pinInput);
-    if (verifiedRole) {
-      StorageService.setAdminRole(verifiedRole);
-      setCurrentRole(verifiedRole);
-      setPinError('');
-      setPinInput('');
-    } else {
-      setPinError('Incorrect PIN code. Please verify your credentials.');
+    if (!pinInput.trim()) {
+      setPinError('Please enter your password or PIN.');
+      return;
+    }
+    setIsVerifyingPin(true);
+    setPinError('');
+    try {
+      const verifiedRole = await StorageService.verifyAdminPinRemote(pinInput);
+      if (verifiedRole) {
+        StorageService.setAdminRole(verifiedRole);
+        setCurrentRole(verifiedRole);
+        setPinError('');
+        setPinInput('');
+      } else {
+        setPinError('Incorrect password or PIN. Please verify your credentials.');
+      }
+    } catch {
+      setPinError('Authentication error. Please check your network connection.');
+    } finally {
+      setIsVerifyingPin(false);
     }
   };
 
@@ -200,33 +220,53 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     onRefreshData();
   };
 
-  // Dedicated Master PIN / Password Update Handler
-  const handleUpdateMasterPin = async (e: React.FormEvent) => {
+  // Dedicated Master Password Update Handler with Strict Validation & Global Cloud Sync
+  const handleUpdateMasterPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    setPinChangeError('');
-    if (!newMasterPin.trim()) {
-      setPinChangeError('PIN / Password cannot be empty.');
+    setPasswordChangeError('');
+    setPasswordChangeSuccess('');
+
+    // 1. Validation Checks
+    if (!currentPasswordInput.trim()) {
+      setPasswordChangeError('Please enter your current password.');
       return;
     }
-    if (newMasterPin.trim().length < 4) {
-      setPinChangeError('Password / PIN must be at least 4 characters long.');
+    if (!newPasswordInput.trim()) {
+      setPasswordChangeError('Please enter your new password.');
       return;
     }
-    if (newMasterPin !== confirmMasterPin) {
-      setPinChangeError('New PINs do not match. Please verify both fields.');
+    if (newPasswordInput.trim().length < 4) {
+      setPasswordChangeError('New password must be at least 4 characters long.');
       return;
     }
-    const updated: SiteSettings = {
-      ...settingsForm,
-      adminPin: newMasterPin.trim(),
-    };
-    await StorageService.saveSettings(updated);
-    setSettingsForm(updated);
-    setNewMasterPin('');
-    setConfirmMasterPin('');
-    setPinChangeSuccess(true);
-    setTimeout(() => setPinChangeSuccess(false), 3500);
-    onRefreshData();
+    if (newPasswordInput.trim() === currentPasswordInput.trim()) {
+      setPasswordChangeError('New password cannot be the same as your current password.');
+      return;
+    }
+    if (newPasswordInput !== confirmPasswordInput) {
+      setPasswordChangeError('New passwords do not match. Please ensure both fields are identical.');
+      return;
+    }
+
+    // 2. Persistent Cloud Update
+    setIsSubmittingPassword(true);
+    try {
+      const result = await StorageService.changeAdminPassword(currentPasswordInput, newPasswordInput);
+      if (result.success) {
+        setPasswordChangeSuccess(result.message || 'Password successfully updated and synced globally across all devices!');
+        setCurrentPasswordInput('');
+        setNewPasswordInput('');
+        setConfirmPasswordInput('');
+        onRefreshData();
+        setTimeout(() => setPasswordChangeSuccess(''), 6000);
+      } else {
+        setPasswordChangeError(result.error || 'Failed to update password. Please verify your current password.');
+      }
+    } catch {
+      setPasswordChangeError('An unexpected error occurred while syncing with the server. Please try again.');
+    } finally {
+      setIsSubmittingPassword(false);
+    }
   };
 
   // Immediate Clear / Delete social media link or phone field
@@ -263,7 +303,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             Boutique Console
           </h3>
           <p className="text-xs text-stone-500 mb-6 font-light">
-            Enter your secret security PIN to continue
+            Enter your secret security password or PIN to continue
           </p>
 
           {pinError && (
@@ -273,27 +313,44 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           )}
 
-          {/* SINGLE HIDDEN MASTER PIN INPUT with type="password" */}
+          {/* SECURE ADMIN LOGIN PASSWORD INPUT with Toggle */}
           <form onSubmit={handlePinSubmit} className="space-y-4">
-            <div>
+            <div className="relative">
               <input
-                type="password"
-                inputMode="numeric"
-                maxLength={12}
+                type={showLoginPin ? 'text' : 'password'}
+                maxLength={32}
                 autoFocus
                 required
-                placeholder="••••"
+                autoCapitalize="off"
+                autoCorrect="off"
+                placeholder="Enter password / PIN"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
-                className="w-full text-center text-2xl tracking-[0.4em] py-3.5 px-4 bg-white border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-[#24201D] font-mono text-[#24201D] transition-colors"
+                className="w-full text-center text-lg sm:text-xl tracking-wider py-3.5 pl-4 pr-11 bg-white border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-[#24201D] font-mono text-[#24201D] transition-colors"
               />
+              <button
+                type="button"
+                onClick={() => setShowLoginPin(!showLoginPin)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer transition-colors"
+                title={showLoginPin ? 'Hide password' : 'Show password'}
+              >
+                {showLoginPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
 
             <button
               type="submit"
-              className="w-full py-3.5 bg-[#24201D] hover:bg-[#3D3732] text-white text-xs font-semibold uppercase tracking-[0.16em] rounded-xl transition-colors cursor-pointer shadow-sm"
+              disabled={isVerifyingPin}
+              className="w-full py-3.5 bg-[#24201D] hover:bg-[#3D3732] disabled:opacity-60 text-white text-xs font-semibold uppercase tracking-[0.16em] rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2"
             >
-              Unlock
+              {isVerifyingPin ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-[#B89772]" />
+                  <span>Verifying Credentials...</span>
+                </>
+              ) : (
+                <span>Unlock Console</span>
+              )}
             </button>
           </form>
         </div>
@@ -518,94 +575,171 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             )}
 
-            {/* 1. DEDICATED SECURITY & MASTER PIN / PASSWORD MANAGEMENT */}
+            {/* 1. DEDICATED SECURITY & ADMIN PASSWORD MANAGEMENT (SYNCED GLOBALLY) */}
             <div className="bg-white border border-[#E8DFD5] rounded-2xl p-5 sm:p-6 space-y-4 shadow-xs">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-[#F2ECE4]">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-[#F2ECE4] text-[#24201D] rounded-xl border border-[#E2D8CC]">
+                  <div className="p-2.5 bg-[#F2ECE4] text-[#24201D] rounded-xl border border-[#E2D8CC]">
                     <KeyRound className="w-4 h-4 text-[#B89772]" />
                   </div>
                   <div>
                     <h3 className="font-serif text-lg text-[#24201D]">
-                      Change Master PIN / Password
+                      Admin Password Management
                     </h3>
                     <p className="text-[11px] text-stone-500">
-                      Set a new secret code anytime directly from your phone to protect your store.
+                      Update your login password with real-time persistent cloud sync across all devices.
                     </p>
                   </div>
                 </div>
-                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md font-semibold hidden sm:inline-block">
-                  Protected
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full font-semibold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Persistent Cloud Sync
+                  </span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider bg-[#24201D] text-white px-2 py-0.5 rounded">
+                    Super Admin
+                  </span>
+                </div>
               </div>
 
-              {pinChangeSuccess && (
-                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>Master PIN changed successfully! Please use this new PIN for future logins.</span>
-                </div>
-              )}
-
-              {pinChangeError && (
-                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{pinChangeError}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleUpdateMasterPin} className="space-y-3 pt-1">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Status Notifications */}
+              {passwordChangeSuccess && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs rounded-xl flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <label className="block text-stone-700 font-semibold text-xs mb-1">
-                      New Secret PIN / Password *
+                    <p className="font-semibold">{passwordChangeSuccess}</p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      The new password is now active globally in the persistent database. Any other phone or computer logging in will strictly require this new password.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {passwordChangeError && (
+                <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-start gap-2.5 animate-in fade-in duration-200">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Unable to Update Password</p>
+                    <p className="text-[11px] text-rose-700 mt-0.5">{passwordChangeError}</p>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleUpdateMasterPassword} className="space-y-4 pt-1">
+                {/* 1. Current Password */}
+                <div>
+                  <label className="block text-stone-800 font-semibold text-xs mb-1">
+                    Current Password <span className="text-rose-600">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showCurrentPassword ? 'text' : 'password'}
+                      required
+                      autoCapitalize="off"
+                      autoCorrect="off"
+                      maxLength={32}
+                      placeholder="Enter your current password"
+                      value={currentPasswordInput}
+                      onChange={(e) => setCurrentPasswordInput(e.target.value)}
+                      className="w-full p-2.5 pr-10 bg-[#FAF7F2] border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-stone-900 font-mono text-xs text-stone-900 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer transition-colors"
+                      title={showCurrentPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showCurrentPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-stone-400 mt-1">
+                    Required for security verification before updating.
+                  </p>
+                </div>
+
+                {/* 2. New Password & Confirm New Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="block text-stone-800 font-semibold text-xs mb-1">
+                      New Password <span className="text-rose-600">*</span>
                     </label>
                     <div className="relative">
                       <input
-                        type={showNewPin ? 'text' : 'password'}
+                        type={showNewPassword ? 'text' : 'password'}
                         required
-                        maxLength={16}
-                        placeholder="Enter new PIN"
-                        value={newMasterPin}
-                        onChange={(e) => setNewMasterPin(e.target.value)}
-                        className="w-full p-2.5 bg-[#FAF7F2] border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-stone-900 font-mono text-xs pr-10 text-stone-900"
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        maxLength={32}
+                        placeholder="Enter new password (min. 4 chars)"
+                        value={newPasswordInput}
+                        onChange={(e) => setNewPasswordInput(e.target.value)}
+                        className="w-full p-2.5 pr-10 bg-[#FAF7F2] border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-stone-900 font-mono text-xs text-stone-900 transition-colors"
                       />
                       <button
                         type="button"
-                        onClick={() => setShowNewPin(!showNewPin)}
-                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer"
-                        title={showNewPin ? 'Hide' : 'Show'}
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer transition-colors"
+                        title={showNewPassword ? 'Hide password' : 'Show password'}
                       >
-                        {showNewPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        {showNewPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
                     </div>
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      Must be at least 4 characters. Can include letters & numbers.
+                    </p>
                   </div>
 
                   <div>
-                    <label className="block text-stone-700 font-semibold text-xs mb-1">
-                      Confirm New PIN / Password *
+                    <label className="block text-stone-800 font-semibold text-xs mb-1">
+                      Confirm New Password <span className="text-rose-600">*</span>
                     </label>
-                    <input
-                      type={showNewPin ? 'text' : 'password'}
-                      required
-                      maxLength={16}
-                      placeholder="Confirm new PIN"
-                      value={confirmMasterPin}
-                      onChange={(e) => setConfirmMasterPin(e.target.value)}
-                      className="w-full p-2.5 bg-[#FAF7F2] border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-stone-900 font-mono text-xs text-stone-900"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        required
+                        autoCapitalize="off"
+                        autoCorrect="off"
+                        maxLength={32}
+                        placeholder="Re-enter new password"
+                        value={confirmPasswordInput}
+                        onChange={(e) => setConfirmPasswordInput(e.target.value)}
+                        className="w-full p-2.5 pr-10 bg-[#FAF7F2] border border-[#D8C7B5] rounded-xl focus:outline-none focus:border-stone-900 font-mono text-xs text-stone-900 transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-1 cursor-pointer transition-colors"
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-stone-400 mt-1">
+                      Must match the new password field exactly.
+                    </p>
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
-                  <p className="text-[11px] text-stone-400">
-                    Your password will be saved instantly to your secure store settings.
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-2 border-t border-[#F2ECE4]">
+                  <p className="text-[11px] text-stone-500">
+                    Saves instantly to the cloud database and syncs across all phones and devices.
                   </p>
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-5 py-2.5 bg-[#24201D] hover:bg-[#3D3732] text-white text-xs font-semibold uppercase tracking-wider rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-1.5 shrink-0"
+                    disabled={isSubmittingPassword}
+                    className="w-full sm:w-auto px-5 py-2.5 bg-[#24201D] hover:bg-[#3D3732] disabled:opacity-60 text-white text-xs font-semibold uppercase tracking-wider rounded-xl transition-colors cursor-pointer shadow-sm flex items-center justify-center gap-2 shrink-0"
                   >
-                    <KeyRound className="w-3.5 h-3.5 text-[#B89772]" />
-                    <span>Update Master Password</span>
+                    {isSubmittingPassword ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#B89772]" />
+                        <span>Saving & Syncing Globally...</span>
+                      </>
+                    ) : (
+                      <>
+                        <KeyRound className="w-3.5 h-3.5 text-[#B89772]" />
+                        <span>Update & Sync Password Globally</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </form>

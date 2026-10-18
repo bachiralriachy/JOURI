@@ -242,7 +242,47 @@ app.post('/api/verify-pin', (req: Request, res: Response) => {
     res.json({ role: 'staff', valid: true });
     return;
   }
-  res.status(401).json({ role: null, valid: false, message: 'Invalid PIN' });
+  res.status(401).json({ role: null, valid: false, message: 'Invalid password or PIN' });
+});
+
+// 7. Dedicated Admin password change endpoint with strict validation & global persistent sync
+app.post('/api/admin/change-password', (req: Request, res: Response) => {
+  const { currentPassword, newPassword } = req.body;
+  const store = getStoreData();
+
+  const currentAdminPin = (store.settings.adminPin || '2026').trim();
+  const providedCurrent = typeof currentPassword === 'string' ? currentPassword.trim() : '';
+  const providedNew = typeof newPassword === 'string' ? newPassword.trim() : '';
+
+  if (!providedCurrent) {
+    res.status(400).json({ success: false, error: 'Please enter your current password.' });
+    return;
+  }
+
+  if (providedCurrent !== currentAdminPin) {
+    res.status(401).json({ success: false, error: 'Current password is incorrect. Please check your credentials.' });
+    return;
+  }
+
+  if (!providedNew || providedNew.length < 4) {
+    res.status(400).json({ success: false, error: 'New password must be at least 4 characters long.' });
+    return;
+  }
+
+  if (providedNew === currentAdminPin) {
+    res.status(400).json({ success: false, error: 'New password cannot be the same as your current password.' });
+    return;
+  }
+
+  // Persist updated password into global persistent database
+  store.settings.adminPin = providedNew;
+  saveStoreData(store);
+  broadcastUpdate(store);
+
+  res.json({
+    success: true,
+    message: 'Super Admin password updated successfully and synced globally across all devices.',
+  });
 });
 
 // Setup Vite middleware in dev or static files in production

@@ -215,6 +215,64 @@ export const StorageService = {
     return this.verifyAdminPin(pin);
   },
 
+  // Dedicated Super Admin Password Management with Global Cloud Sync
+  async changeAdminPassword(
+    currentPassword: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> {
+    const currentSettings = this.getSettings();
+    const cleanCurrent = currentPassword.trim();
+    const cleanNew = newPassword.trim();
+
+    if (!cleanCurrent) {
+      return { success: false, error: 'Please enter your current password.' };
+    }
+    if (!cleanNew || cleanNew.length < 4) {
+      return { success: false, error: 'New password must be at least 4 characters long.' };
+    }
+    if (cleanNew === cleanCurrent) {
+      return { success: false, error: 'New password cannot be the same as your current password.' };
+    }
+
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          currentPassword: cleanCurrent,
+          newPassword: cleanNew,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        // Update local settings cache & notify listeners
+        const updatedSettings: SiteSettings = {
+          ...currentSettings,
+          adminPin: cleanNew,
+        };
+        updateLocalCache(undefined, updatedSettings);
+        return { success: true, message: data.message || 'Password changed and synced globally across all devices!' };
+      } else {
+        return { success: false, error: data.error || 'Failed to update password.' };
+      }
+    } catch (err) {
+      // Offline fallback: check local settings
+      if (cleanCurrent !== (currentSettings.adminPin || '2026').trim()) {
+        return { success: false, error: 'Current password is incorrect. Please check your credentials.' };
+      }
+      const updatedSettings: SiteSettings = {
+        ...currentSettings,
+        adminPin: cleanNew,
+      };
+      updateLocalCache(undefined, updatedSettings);
+      return {
+        success: true,
+        message: 'Password updated locally (server offline).',
+      };
+    }
+  },
+
   getAdminRole(): AdminRole | null {
     try {
       const role = sessionStorage.getItem(STORAGE_KEYS.ADMIN_ROLE);
