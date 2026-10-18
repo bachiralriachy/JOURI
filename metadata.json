@@ -1,0 +1,6 @@
+{
+  "name": "Jouri Boutique - Broumana, Lebanon",
+  "description": "Luxurious e-commerce storefront & full-control admin console for Jouri Boutique (Broumana, Mar Chaaya, Lebanon) with dual-currency USD/LBP pricing, handmade collections, professional alterations, and WhatsApp ordering.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
