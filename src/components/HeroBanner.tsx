@@ -55,9 +55,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           <div className="lg:col-span-7 order-1 lg:order-2">
             <div className="relative aspect-[4/3] sm:aspect-[16/10] w-full rounded-2xl overflow-hidden shadow-sm bg-[#F2ECE4]">
               <img
-                src="/src/assets/images/hero_boutique_collection_1792241563828.jpg"
+                src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&w=1400&q=80"
                 alt="Jouri Boutique Collection"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (target.src !== 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1000&q=80') {
+                    target.src = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1000&q=80';
+                  }
+                }}
                 className="w-full h-full object-cover object-center"
               />
             </div>

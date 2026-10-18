@@ -1,17 +1,18 @@
+import React from 'react';
 import { Product, Category, SiteSettings, AdminRole } from '../types';
-import { INITIAL_PRODUCTS, INITIAL_CATEGORIES, INITIAL_SETTINGS } from '../data/mockData';
+import { INITIAL_PRODUCTS, INITIAL_CATEGORIES, INITIAL_SETTINGS, DEFAULT_FALLBACK_IMAGE } from '../data/mockData';
 
 const STORAGE_KEYS = {
-  SETTINGS: 'jouri_settings_v3',
-  PRODUCTS: 'jouri_products_v3',
-  ADMIN_ROLE: 'jouri_admin_role_v3',
+  SETTINGS: 'jouri_settings_v4',
+  PRODUCTS: 'jouri_products_v4',
+  ADMIN_ROLE: 'jouri_admin_role_v4',
 };
 
 export const StorageService = {
   // Site Settings
   getSettings(): SiteSettings {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
+      const data = localStorage.getItem(STORAGE_KEYS.SETTINGS) || localStorage.getItem('jouri_settings_v3');
       if (!data) {
         localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(INITIAL_SETTINGS));
         return INITIAL_SETTINGS;
@@ -69,15 +70,38 @@ export const StorageService = {
     return this.getAdminRole() !== null;
   },
 
-  // Products CRUD
+  // Products CRUD with auto-migration of broken/local image paths to reliable Unsplash URLs
   getProducts(): Product[] {
     try {
-      const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS);
+      const data = localStorage.getItem(STORAGE_KEYS.PRODUCTS) || localStorage.getItem('jouri_products_v3');
       if (!data) {
         localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(INITIAL_PRODUCTS));
         return INITIAL_PRODUCTS;
       }
-      return JSON.parse(data);
+      const parsed: Product[] = JSON.parse(data);
+
+      let needsSave = false;
+      const sanitized = parsed.map((p) => {
+        // Check if any image has broken or local relative path that fails on Vercel
+        const hasBrokenImage = !p.images || p.images.length === 0 || p.images.some((img) => !img || img.startsWith('/src/assets') || img.startsWith('./src/assets'));
+        if (hasBrokenImage) {
+          needsSave = true;
+          const matchingInit = INITIAL_PRODUCTS.find((initP) => initP.id === p.id);
+          const validImages = matchingInit
+            ? matchingInit.images
+            : [DEFAULT_FALLBACK_IMAGE];
+          return {
+            ...p,
+            images: validImages,
+          };
+        }
+        return p;
+      });
+
+      if (needsSave || !localStorage.getItem(STORAGE_KEYS.PRODUCTS)) {
+        localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(sanitized));
+      }
+      return sanitized;
     } catch {
       return INITIAL_PRODUCTS;
     }
@@ -143,4 +167,15 @@ export function buildWhatsAppOrderLink(
 
   const text = `Hello Jouri Boutique,\n\nI would like to order this piece:\n✨ *${productTitle}*\n💵 *Price:* ${usd} (${lbp})\n📏 *Size:* ${selectedSize || 'Standard'}\n\nPlease let me know availability and delivery details in Lebanon. Thank you!`;
   return `https://wa.me/${cleanNumber}?text=${encodeURIComponent(text)}`;
+}
+
+// Global Image Fallback Handler for onError events
+export function handleImageFallback(
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  fallback = DEFAULT_FALLBACK_IMAGE
+) {
+  const img = e.currentTarget;
+  if (img.src !== fallback) {
+    img.src = fallback;
+  }
 }

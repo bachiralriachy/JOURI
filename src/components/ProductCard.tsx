@@ -1,7 +1,7 @@
 import React from 'react';
 import { MessageCircle, ArrowUpRight } from 'lucide-react';
 import { Product } from '../types';
-import { formatUSD, formatLBP, buildWhatsAppOrderLink } from '../services/storage';
+import { formatUSD, formatLBP, buildWhatsAppOrderLink, handleImageFallback } from '../services/storage';
 
 interface ProductCardProps {
   product: Product;
@@ -42,6 +42,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           src={product.images[0]}
           alt={product.title}
           referrerPolicy="no-referrer"
+          onError={(e) => handleImageFallback(e)}
           className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
         />
 

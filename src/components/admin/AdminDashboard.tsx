@@ -27,7 +27,8 @@ import {
   MessageCircle
 } from 'lucide-react';
 import { Product, SiteSettings, AdminRole } from '../../types';
-import { StorageService, formatUSD, formatLBP } from '../../services/storage';
+import { StorageService, formatUSD, formatLBP, handleImageFallback } from '../../services/storage';
+import { FASHION_PRESETS, DEFAULT_FALLBACK_IMAGE } from '../../data/mockData';
 
 interface AdminDashboardProps {
   onClose: () => void;
@@ -441,6 +442,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                         src={p.images[0]}
                         alt={p.title}
                         referrerPolicy="no-referrer"
+                        onError={(e) => handleImageFallback(e)}
                         className="w-20 h-24 sm:w-24 sm:h-28 object-cover rounded-lg bg-[#F5EFE6] border border-[#E2D8CC] shrink-0"
                       />
 
@@ -1032,48 +1034,58 @@ CREATE TABLE IF NOT EXISTS products (
 
               <div>
                 <label className="block text-stone-700 font-semibold mb-1">
-                  Image URL (Static image only) *
+                  Image URL (High-quality online fashion photo URL) *
                 </label>
-                <input
-                  type="text"
-                  required
-                  value={productForm.images}
-                  onChange={(e) => setProductForm({ ...productForm, images: e.target.value })}
-                  placeholder="/src/assets/images/product_silk_pleated_dress_1792241564244.jpg"
-                  className="w-full p-3 bg-white border border-[#E2D8CC] rounded-xl focus:outline-none font-mono text-xs"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="url"
+                    required
+                    value={productForm.images}
+                    onChange={(e) => setProductForm({ ...productForm, images: e.target.value })}
+                    placeholder="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80"
+                    className="flex-1 p-3 bg-white border border-[#E2D8CC] rounded-xl focus:outline-none font-mono text-xs"
+                  />
+                  {Boolean(productForm.images.trim()) && (
+                    <div className="w-11 h-11 rounded-lg overflow-hidden border border-[#E2D8CC] shrink-0 bg-[#F5EFE6]">
+                      <img
+                        src={productForm.images.split(',')[0].trim()}
+                        alt="Preview"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => handleImageFallback(e)}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                </div>
 
-                {/* Presets */}
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className="text-[10px] text-stone-500 self-center mr-1">Presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => setProductForm({ ...productForm, images: '/src/assets/images/product_silk_pleated_dress_1792241564244.jpg' })}
-                    className="text-[10px] px-2 py-1 bg-white border border-[#E2D8CC] rounded hover:border-stone-400 cursor-pointer"
-                  >
-                    Pleated Dress
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProductForm({ ...productForm, images: '/src/assets/images/product_embroidered_abaya_1792241565441.jpg' })}
-                    className="text-[10px] px-2 py-1 bg-white border border-[#E2D8CC] rounded hover:border-stone-400 cursor-pointer"
-                  >
-                    Mocha Abaya
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProductForm({ ...productForm, images: '/src/assets/images/product_tailored_linen_set_1792241565514.jpg' })}
-                    className="text-[10px] px-2 py-1 bg-white border border-[#E2D8CC] rounded hover:border-stone-400 cursor-pointer"
-                  >
-                    Linen Suit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setProductForm({ ...productForm, images: '/src/assets/images/product_pearl_silk_scarf_1792241566086.jpg' })}
-                    className="text-[10px] px-2 py-1 bg-white border border-[#E2D8CC] rounded hover:border-stone-400 cursor-pointer"
-                  >
-                    Pearl Scarf
-                  </button>
+                {/* Curated Sample Fashion Image Presets */}
+                <div className="mt-2.5 space-y-1.5">
+                  <span className="text-[10px] text-stone-500 font-semibold uppercase tracking-wider block">
+                    Or select a curated fashion sample:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {FASHION_PRESETS.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() =>
+                          setProductForm({
+                            ...productForm,
+                            images: preset.url,
+                            category: preset.category || productForm.category,
+                          })
+                        }
+                        className={`text-[10.5px] px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${
+                          productForm.images === preset.url
+                            ? 'bg-[#24201D] text-white border-[#24201D] shadow-xs'
+                            : 'bg-white text-stone-700 border-[#E2D8CC] hover:border-stone-400 hover:bg-[#FAF7F2]'
+                        }`}
+                      >
+                        <span className="w-2 h-2 rounded-full bg-[#B89772]" />
+                        <span>{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 

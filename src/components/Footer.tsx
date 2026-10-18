@@ -22,8 +22,8 @@ export const Footer: React.FC<FooterProps> = ({
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           {/* Logo & Tagline */}
           <div className="space-y-2">
-            <button onClick={onNavigateHome} className="cursor-pointer">
-              <Logo size="md" />
+            <button onClick={onNavigateHome} className="cursor-pointer text-left">
+              <Logo size="md" showBrandText />
             </button>
             <p className="text-xs text-stone-500 font-light max-w-sm">
               {settings.addressText}, Lebanon. Handmade occasion wear, bespoke tailoring & nationwide delivery.

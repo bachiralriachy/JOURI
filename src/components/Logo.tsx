@@ -4,55 +4,49 @@ import logoImg from '../assets/images/watermarked_img_10811691523014342063.jpg';
 interface LogoProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg' | 'xl';
-  showText?: boolean;
+  showBrandText?: boolean;
 }
 
 export const Logo: React.FC<LogoProps> = ({
   className = '',
   size = 'md',
-  showText = false,
+  showBrandText = false,
 }) => {
-  // Dimension presets for the official circular emblem badge
+  // Dimension presets for the circular emblem badge
   const sizeClasses = {
-    sm: 'w-10 h-10',
-    md: 'w-[50px] h-[50px] sm:w-[54px] sm:h-[54px]',
-    lg: 'w-20 h-20',
-    xl: 'w-28 h-28',
+    sm: 'w-9 h-9',
+    md: 'w-10 h-10 sm:w-12 sm:h-12',
+    lg: 'w-16 h-16',
+    xl: 'w-24 h-24',
   }[size];
 
   return (
-    <div className={`inline-flex items-center gap-3 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2.5 sm:gap-3 select-none ${className}`}>
       {/* Official circular emblem badge with nude/cream background and rose illustration */}
       <div
         className={`relative shrink-0 rounded-full overflow-hidden bg-[#FAF3EC] border border-[#E8DFD5] shadow-xs transition-transform duration-300 hover:scale-[1.03] ${sizeClasses}`}
       >
         <img
           src={logoImg}
-          alt="Jouri Boutique official logo"
+          alt="Jouri Boutique Logo"
           className="w-full h-full object-cover rounded-full"
           referrerPolicy="no-referrer"
           loading="eager"
-          width={54}
-          height={54}
+          width={48}
+          height={48}
           onError={(e) => {
-            // Fallback to public path if bundler asset path has issues
             const target = e.currentTarget;
-            if (target.src !== '/watermarked_img_10811691523014342063.jpg') {
+            if (target.src !== '/watermarked_img_10811691523014342063.jpg' && target.src !== '/logo.jpg') {
               target.src = '/watermarked_img_10811691523014342063.jpg';
             }
           }}
         />
       </div>
 
-      {showText && (
-        <div className="flex flex-col text-left">
-          <span className="font-serif font-bold text-lg sm:text-xl tracking-[0.14em] text-[#1F1A17] uppercase leading-tight">
-            Jouri
-          </span>
-          <span className="text-[9.5px] tracking-[0.28em] text-[#7A6F65] uppercase font-medium leading-none">
-            Boutique
-          </span>
-        </div>
+      {showBrandText && (
+        <span className="font-serif text-[14px] sm:text-base lg:text-lg font-medium tracking-[0.14em] sm:tracking-[0.18em] uppercase text-[#1A1A1A] transition-colors whitespace-nowrap">
+          JOURI BOUTIQUE
+        </span>
       )}
     </div>
   );

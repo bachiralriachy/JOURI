@@ -1,5 +1,40 @@
 import { Product, Category, SiteSettings } from '../types';
 
+export const DEFAULT_FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80';
+
+export const FASHION_PRESETS = [
+  {
+    name: 'Pleated Silk Dress',
+    url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
+    category: 'Dresses',
+  },
+  {
+    name: 'Mocha Abaya',
+    url: 'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?auto=format&fit=crop&w=800&q=80',
+    category: 'Abayas',
+  },
+  {
+    name: 'Tailored Linen Suit',
+    url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=800&q=80',
+    category: 'Sets & Suits',
+  },
+  {
+    name: 'Chiffon & Pearl Scarf',
+    url: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80',
+    category: 'Accessories',
+  },
+  {
+    name: 'Evening Satin Gown',
+    url: 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=80',
+    category: 'Dresses',
+  },
+  {
+    name: 'Handmade Occasion Set',
+    url: 'https://images.unsplash.com/photo-1572804013309-59a88b7e92f1?auto=format&fit=crop&w=800&q=80',
+    category: 'Handmade',
+  },
+];
+
 export const INITIAL_SETTINGS: SiteSettings = {
   adminPin: '2026',
   staffPin: '5555',
@@ -29,8 +64,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     priceUSD: 145,
     category: 'Dresses',
     images: [
-      '/src/assets/images/product_silk_pleated_dress_1792241564244.jpg',
-      '/src/assets/images/hero_boutique_collection_1792241563828.jpg',
+      'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1539109136881-3be0616acf4b?auto=format&fit=crop&w=800&q=80',
     ],
     sizes: ['S', 'M', 'L', 'XL'],
     inStock: true,
@@ -43,8 +78,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     priceUSD: 110,
     category: 'Handmade',
     images: [
-      '/src/assets/images/product_embroidered_abaya_1792241565441.jpg',
-      '/src/assets/images/hero_boutique_collection_1792241563828.jpg',
+      'https://images.unsplash.com/photo-1583391733956-3750e0ff4e8b?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1566174053879-31528523f8ae?auto=format&fit=crop&w=800&q=80',
     ],
     sizes: ['S (52)', 'M (54)', 'L (56)', 'XL (58)'],
     inStock: true,
@@ -57,8 +92,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     priceUSD: 125,
     category: 'Sets & Suits',
     images: [
-      '/src/assets/images/product_tailored_linen_set_1792241565514.jpg',
-      '/src/assets/images/product_embroidered_abaya_1792241565441.jpg',
+      'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=800&q=80',
     ],
     sizes: ['S', 'M', 'L', 'XL'],
     inStock: true,
@@ -71,8 +106,8 @@ export const INITIAL_PRODUCTS: Product[] = [
     priceUSD: 45,
     category: 'Handmade',
     images: [
-      '/src/assets/images/product_pearl_silk_scarf_1792241566086.jpg',
-      '/src/assets/images/product_silk_pleated_dress_1792241564244.jpg',
+      'https://images.unsplash.com/photo-1601924994987-69e26d50dc26?auto=format&fit=crop&w=800&q=80',
+      'https://images.unsplash.com/photo-1576995853123-5a10305d93c0?auto=format&fit=crop&w=800&q=80',
     ],
     sizes: ['Standard One Size'],
     inStock: true,

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ChevronLeft, MessageCircle, Ruler, Scissors, Share2 } from 'lucide-react';
 import { Product, SiteSettings } from '../types';
-import { formatUSD, formatLBP, buildWhatsAppOrderLink } from '../services/storage';
+import { formatUSD, formatLBP, buildWhatsAppOrderLink, handleImageFallback } from '../services/storage';
 
 interface ProductDetailPageProps {
   product: Product;
@@ -69,6 +69,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
               src={product.images[selectedImage] || product.images[0]}
               alt={product.title}
               referrerPolicy="no-referrer"
+              onError={(e) => handleImageFallback(e)}
               className="w-full h-full object-cover object-center"
             />
             <button
@@ -95,6 +96,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     src={img}
                     alt={`${product.title} view ${idx + 1}`}
                     referrerPolicy="no-referrer"
+                    onError={(e) => handleImageFallback(e)}
                     className="w-full h-full object-cover"
                   />
                 </button>
@@ -199,6 +201,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     src={p.images[0]}
                     alt={p.title}
                     referrerPolicy="no-referrer"
+                    onError={(e) => handleImageFallback(e)}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>

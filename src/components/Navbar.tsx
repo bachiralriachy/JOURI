@@ -20,12 +20,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#E8DFD5] shadow-xs">
       {/* Main Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
-        {/* Brand Logo & Oval Rose Emblem */}
+        {/* Brand Logo & Brand Name Text ("JOURI BOUTIQUE") */}
         <button
           onClick={onNavigateHome}
-          className="text-left cursor-pointer focus:outline-none"
+          className="flex items-center gap-2.5 sm:gap-3 text-left cursor-pointer focus:outline-none group min-w-0"
+          aria-label="Jouri Boutique Home"
         >
-          <Logo size="md" />
+          <Logo size="md" showBrandText />
         </button>
 
         {/* Minimal Navigation Links (Desktop) */}
