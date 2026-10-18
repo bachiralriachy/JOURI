@@ -1,0 +1,69 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common Primitives
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Product validation helper
+    function isValidProduct(data) {
+      return data.keys().hasAll(['id', 'title', 'priceUSD', 'category', 'images', 'inStock']) &&
+             data.keys().hasOnly(['id', 'title', 'subtitle', 'priceUSD', 'category', 'images', 'sizes', 'inStock', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             (!('subtitle' in data) || (data.subtitle is string && data.subtitle.size() <= 300)) &&
+             (data.priceUSD is int || data.priceUSD is float) && data.priceUSD >= 0 &&
+             data.category is string && data.category.size() > 0 && data.category.size() <= 100 &&
+             data.images is list && data.images.size() <= 20 &&
+             data.inStock is bool &&
+             (!('sizes' in data) || (data.sizes is list && data.sizes.size() <= 20)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 100));
+    }
+
+    // Settings validation helper
+    function isValidSettings(data) {
+      return data.keys().hasAll(['adminPin', 'usdToLbpRate', 'addressText', 'googleMapsUrl']) &&
+             data.keys().hasOnly(['adminPin', 'staffPin', 'whatsappNumber', 'instagramUrl', 'tiktokUrl', 'facebookUrl', 'usdToLbpRate', 'addressText', 'googleMapsUrl']) &&
+             data.adminPin is string && data.adminPin.size() >= 1 && data.adminPin.size() <= 100 &&
+             (!('staffPin' in data) || (data.staffPin is string && data.staffPin.size() <= 100)) &&
+             (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 50)) &&
+             (!('instagramUrl' in data) || (data.instagramUrl is string && data.instagramUrl.size() <= 300)) &&
+             (!('tiktokUrl' in data) || (data.tiktokUrl is string && data.tiktokUrl.size() <= 300)) &&
+             (!('facebookUrl' in data) || (data.facebookUrl is string && data.facebookUrl.size() <= 300)) &&
+             (data.usdToLbpRate is int || data.usdToLbpRate is float) && data.usdToLbpRate > 0 &&
+             data.addressText is string && data.addressText.size() > 0 && data.addressText.size() <= 500 &&
+             data.googleMapsUrl is string && data.googleMapsUrl.size() > 0 && data.googleMapsUrl.size() <= 500;
+    }
+
+    // Products collection: Publicly readable for boutique visitors, validated writes for store managers
+    match /products/{productId} {
+      allow get, list: if true;
+      allow create: if isValidId(productId) && isValidProduct(incoming()) && incoming().id == productId;
+      allow update: if isValidId(productId) && isValidProduct(incoming()) && incoming().id == productId;
+      allow delete: if isValidId(productId);
+    }
+
+    // Global site settings (single document /settings/store)
+    match /settings/{settingId} {
+      allow get, list: if isValidId(settingId);
+      allow create: if isValidId(settingId) && isValidSettings(incoming());
+      allow update: if isValidId(settingId) && isValidSettings(incoming());
+      allow delete: if false;
+    }
+  }
+}

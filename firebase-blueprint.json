@@ -1,0 +1,113 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "Fashion boutique catalog product item",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the product"
+        },
+        "title": {
+          "type": "string",
+          "description": "Product display title",
+          "maxLength": 200
+        },
+        "subtitle": {
+          "type": "string",
+          "description": "Optional secondary description or subtitle",
+          "maxLength": 300
+        },
+        "priceUSD": {
+          "type": "number",
+          "description": "Price in USD"
+        },
+        "category": {
+          "type": "string",
+          "description": "Category slug or name",
+          "maxLength": 100
+        },
+        "images": {
+          "type": "array",
+          "description": "List of high-resolution image URLs"
+        },
+        "sizes": {
+          "type": "array",
+          "description": "Available clothing sizes"
+        },
+        "inStock": {
+          "type": "boolean",
+          "description": "Stock availability status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        }
+      },
+      "required": ["id", "title", "priceUSD", "category", "images", "inStock"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global store settings, contact details, location, and admin pin",
+      "type": "object",
+      "properties": {
+        "adminPin": {
+          "type": "string",
+          "description": "Master admin security pin or password",
+          "maxLength": 100
+        },
+        "staffPin": {
+          "type": "string",
+          "description": "Staff access security pin",
+          "maxLength": 100
+        },
+        "whatsappNumber": {
+          "type": "string",
+          "description": "WhatsApp contact phone number",
+          "maxLength": 50
+        },
+        "instagramUrl": {
+          "type": "string",
+          "description": "Instagram profile link",
+          "maxLength": 300
+        },
+        "tiktokUrl": {
+          "type": "string",
+          "description": "TikTok profile link",
+          "maxLength": 300
+        },
+        "facebookUrl": {
+          "type": "string",
+          "description": "Facebook profile link",
+          "maxLength": 300
+        },
+        "usdToLbpRate": {
+          "type": "number",
+          "description": "USD to LBP exchange rate"
+        },
+        "addressText": {
+          "type": "string",
+          "description": "Physical shop location text description",
+          "maxLength": 500
+        },
+        "googleMapsUrl": {
+          "type": "string",
+          "description": "Google Maps pin link",
+          "maxLength": 500
+        }
+      },
+      "required": ["adminPin", "usdToLbpRate", "addressText", "googleMapsUrl"]
+    }
+  },
+  "firestore": {
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Collection of all fashion products displayed in the boutique"
+    },
+    "/settings/{settingId}": {
+      "schema": "SiteSettings",
+      "description": "Global boutique settings document"
+    }
+  }
+}
